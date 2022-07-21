@@ -77,8 +77,7 @@ fn count_dir(path: &Path, ext: &str) -> Result<CodeStats> {
         .par_bridge()
         .filter_map(|path| path.ok())
         .filter_map(|path| count_file(&path).ok())
-        // .sum();
-        .reduce(|| CodeStats::new(), |a, b| a + b);
+        .reduce(CodeStats::new, |a, b| a + b);
 
     Ok(res)
 }
