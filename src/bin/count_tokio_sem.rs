@@ -83,12 +83,16 @@ async fn count_dir(path: &Path, ext: &str) -> Result<CodeStats> {
 
     for path in paths {
         let tx_ = tx.clone();
-        let permit = Arc::clone(&sem).acquire_owned().await;
+        let sem_clone = Arc::clone(&sem);
+        // let permit = Arc::clone(&sem).acquire_owned().await;
         tokio::spawn(async move {
-            let permit_ = permit;
-            let count = count_file(&path).await;
-            if let Ok(s) = count {
-                tx_.send(s).await.unwrap();
+            let aq = sem_clone.try_acquire();
+            // let permit_ = permit;
+            if let Ok(_guard) = aq {
+                let count = count_file(&path).await;
+                if let Ok(s) = count {
+                    tx_.send(s).await.unwrap();
+                }
             }
         });
     }
