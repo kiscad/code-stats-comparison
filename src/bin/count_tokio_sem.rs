@@ -1,5 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
+use futures::stream::{FuturesUnordered, StreamExt};
 use glob::glob;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -52,7 +53,27 @@ impl std::ops::AddAssign for CodeStats {
     }
 }
 
-async fn count_file(path: &Path) -> Result<CodeStats> {
+fn count_file(path: &Path) -> Result<CodeStats> {
+    let mut codes = 0;
+    let mut blanks = 0;
+
+    let buf = std::fs::read_to_string(path).unwrap();
+    buf.lines().for_each(|line| {
+        if line.trim().is_empty() {
+            blanks += 1;
+        } else {
+            codes += 1;
+        }
+    });
+
+    Ok(CodeStats {
+        files: 1,
+        blanks,
+        codes,
+    })
+}
+
+async fn count_file2(path: &Path) -> Result<CodeStats> {
     let mut codes = 0;
     let mut blanks = 0;
 
@@ -78,18 +99,40 @@ async fn count_dir(path: &Path, ext: &str) -> Result<CodeStats> {
     let paths = glob(&format!("{}**/*.{}", path.to_string_lossy(), ext))?;
     let paths = paths.filter_map(|p| p.ok());
 
+    let mut futs = FuturesUnordered::new();
+    let mut stats = CodeStats::new();
+
+    for path in paths {
+        let fut = tokio::spawn(async move { count_file(&path) });
+        futs.push(fut);
+
+        if futs.len() == 1000 {
+            if let Some(Ok(Ok(s))) = futs.next().await {
+                stats += s;
+            }
+        }
+    }
+
+    while let Some(Ok(Ok(s))) = futs.next().await {
+        stats += s;
+    }
+    Ok(stats)
+}
+
+async fn count_dir2(path: &Path, ext: &str) -> Result<CodeStats> {
+    let paths = glob(&format!("{}**/*.{}", path.to_string_lossy(), ext))?;
+    let paths = paths.filter_map(|p| p.ok());
+
     let (tx, mut rx) = mpsc::channel(300);
     let sem = Arc::new(Semaphore::new(1000));
 
     for path in paths {
         let tx_ = tx.clone();
         let sem_clone = Arc::clone(&sem);
-        // let permit = Arc::clone(&sem).acquire_owned().await;
         tokio::spawn(async move {
             let aq = sem_clone.try_acquire();
-            // let permit_ = permit;
             if let Ok(_guard) = aq {
-                let count = count_file(&path).await;
+                let count = count_file2(&path).await;
                 if let Ok(s) = count {
                     tx_.send(s).await.unwrap();
                 }
