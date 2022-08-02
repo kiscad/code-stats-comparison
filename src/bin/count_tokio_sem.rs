@@ -14,6 +14,7 @@ use tokio::sync::Semaphore;
 struct Args {
     #[clap(short = 't')]
     exts: Vec<String>,
+    #[clap(short = 'f')]
     path: PathBuf,
 }
 

@@ -11,6 +11,7 @@ use tokio::sync::mpsc;
 struct Args {
     #[clap(short = 't')]
     exts: Vec<String>,
+    #[clap(short = 'f')]
     path: PathBuf,
 }
 
