@@ -3,8 +3,8 @@ use clap::Parser;
 use std::collections::HashMap;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::Instant;
-use std::{fs, sync::Arc};
 
 /// Async Task Runner with Traffic-Control ability
 struct TcRunner {
@@ -82,7 +82,7 @@ async fn count_dir(
     valid_types: Arc<Vec<String>>,
     runner: Arc<TcRunner>,
 ) -> Result<HashMap<String, CodeStats>> {
-    let paths: Vec<_> = fs::read_dir(dir)?
+    let paths: Vec<_> = std::fs::read_dir(dir)?
         .filter_map(|en| en.ok())
         .map(|en| en.path())
         .collect();
@@ -95,7 +95,11 @@ async fn count_dir(
             if valid_types.iter().any(|t| t == ext) {
                 let path = f.clone();
                 let ext = ext.to_owned();
-                tasks.push(runner.spawn(async move { count_file(path, ext) }).await)
+                tasks.push(
+                    runner
+                        .spawn(async move { count_file(path, ext).await })
+                        .await,
+                )
             }
         }
     }
@@ -136,9 +140,13 @@ fn merge_hashmap_codestats(
     }
 }
 
-fn count_file(path: PathBuf, ext: String) -> Result<HashMap<String, CodeStats>> {
+// use tokio::fs;
+
+async fn count_file(path: PathBuf, ext: String) -> Result<HashMap<String, CodeStats>> {
     let mut codes = 0;
     let mut blanks = 0;
+
+    // if let Ok(buf) = fs::read_to_string(path).await {
     if let Ok(buf) = std::fs::read_to_string(path) {
         buf.lines().for_each(|line| {
             if line.trim().is_empty() {
