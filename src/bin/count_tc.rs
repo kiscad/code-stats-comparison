@@ -1,63 +1,13 @@
+use code_stats::Cli;
+use code_stats::CodeStats;
+use code_stats::TcRunner;
+
 use anyhow::{anyhow, Result};
 use clap::Parser;
 use std::collections::HashMap;
-use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
-
-/// Async Task Runner with Traffic-Control ability
-struct TcRunner {
-    sender: async_channel::Sender<()>,
-    receiver: async_channel::Receiver<()>,
-}
-
-impl TcRunner {
-    fn new(limit: usize) -> Self {
-        let (tx, rx) = async_channel::bounded(limit);
-        TcRunner {
-            sender: tx,
-            receiver: rx,
-        }
-    }
-
-    async fn spawn<T>(&self, task: T) -> tokio::task::JoinHandle<T::Output>
-    where
-        T: Future + Send + 'static,
-        T::Output: Send + 'static,
-    {
-        let _ = self.sender.send(()).await;
-        let rx = self.receiver.clone();
-        tokio::spawn(async move {
-            let res = task.await;
-            let _ = rx.recv().await;
-            res
-        })
-    }
-}
-
-#[derive(Debug, Clone, Default)]
-struct CodeStats {
-    files: usize,
-    blanks: usize,
-    codes: usize,
-}
-
-impl std::ops::AddAssign for CodeStats {
-    fn add_assign(&mut self, rhs: Self) {
-        self.files += rhs.files;
-        self.blanks += rhs.blanks;
-        self.codes += rhs.codes;
-    }
-}
-
-#[derive(Debug, Parser)]
-struct Cli {
-    #[clap(short = 't')]
-    types: Vec<String>,
-    #[clap(short = 'f')]
-    dir: PathBuf,
-}
 
 #[tokio::main]
 async fn main() {
