@@ -1,6 +1,5 @@
 use code_stats::Cli;
 use code_stats::CodeStats;
-use code_stats::TcRunner;
 
 use anyhow::Result;
 use clap::Parser;
@@ -15,10 +14,9 @@ async fn main() {
     let args = Cli::parse();
     let dir = Path::new(&args.dir);
     let types = Arc::new(args.types);
-    let (tx, mut rx) = mpsc::channel(100000);
+    let (tx, mut rx) = mpsc::channel(1000000);
 
     let timer = Instant::now();
-    let runner = Arc::new(TcRunner::new(1000));
     let res = tokio::spawn(async move {
         let mut res: HashMap<String, CodeStats> = HashMap::new();
         while let Some((ext, stats)) = rx.recv().await {
@@ -28,7 +26,7 @@ async fn main() {
         res
     });
 
-    count_dir(dir, types, runner, tx).await.unwrap();
+    count_dir(dir, types, tx).await.unwrap();
 
     match res.await {
         Ok(stats) => println!("{:?}", stats),
@@ -42,7 +40,6 @@ async fn main() {
 async fn count_dir(
     dir: &Path,
     valid_types: Arc<Vec<String>>,
-    runner: Arc<TcRunner>,
     sender: Sender<(String, CodeStats)>,
 ) -> Result<()> {
     let paths: Vec<_> = std::fs::read_dir(dir)?
@@ -58,21 +55,16 @@ async fn count_dir(
                 let path = f.clone();
                 let ext = ext.to_owned();
                 let sender_ = sender.clone();
-                runner
-                    .spawn(async move { count_file(path, ext, sender_).await })
-                    .await;
+                tokio::spawn(async move { count_file(path, ext, sender_).await });
             }
         }
     }
 
     for d in dirs {
         let vtypes = valid_types.clone();
-        let runner_ = runner.clone();
-        let dir_ = d.clone();
         let sender_ = sender.clone();
-        runner
-            .spawn(async move { count_dir(&dir_, vtypes, runner_, sender_).await })
-            .await;
+        let dir_ = d.clone();
+        tokio::spawn(async move { count_dir(&dir_, vtypes, sender_).await });
     }
 
     Ok(())

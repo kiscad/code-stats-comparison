@@ -1,6 +1,5 @@
 use code_stats::Cli;
 use code_stats::CodeStats;
-use code_stats::TcRunner;
 
 use clap::Parser;
 use std::collections::HashMap;
@@ -16,7 +15,7 @@ async fn main() {
     let dir = args.dir.clone();
     let types = args.types;
 
-    let (tx, rx) = mpsc::channel(10000);
+    let (tx, rx) = mpsc::channel(100000);
     let timer = Instant::now();
 
     // start the task manager
@@ -30,7 +29,6 @@ async fn main() {
 }
 
 async fn task_manager(mut rcvr: Receiver<(PathBuf, String)>) -> HashMap<String, CodeStats> {
-    let runner = TcRunner::new(100);
     let (tx, mut rx) = mpsc::channel(10000);
 
     let res = tokio::spawn(async move {
@@ -44,9 +42,7 @@ async fn task_manager(mut rcvr: Receiver<(PathBuf, String)>) -> HashMap<String, 
 
     while let Some((path, ext)) = rcvr.recv().await {
         let tx_ = tx.clone();
-        runner
-            .spawn(async move { count_file(path, ext, tx_).await })
-            .await;
+        tokio::spawn(async move { count_file(path, ext, tx_).await });
     }
     drop(tx);
 
