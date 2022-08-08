@@ -1,6 +1,10 @@
 1.	源码下载
+
+Android的源码在 https://android.googlesource.com/ 网站上，Android源码成为aosp （Andriod Open Source Project）。
+
 AOSP下包含1000+个git仓库，因此需要单独的工具来管理这些仓库，就是repo工具。
 因此要下载aosp源码，首先需要下载repo工具
+
 (1)	repo工具下载及安装
 $ mkdir ~/bin
 $ PATH=~/bin:$PATH
