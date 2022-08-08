@@ -10,7 +10,7 @@ use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::mpsc::{self, Sender};
 
-#[tokio::main]
+#[tokio::main(worker_threads = 2)]
 async fn main() {
     let args = Cli::parse();
     let dir = Path::new(&args.dir);
